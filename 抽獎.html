@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8" />
+<title>CSV 抽獎系統</title>
+<style>
+body{font-family:"Noto Sans TC";background:#f2f3f5;padding:20px}
+.container{max-width:600px;margin:auto;background:#fff;padding:24px;border-radius:14px}
+label{font-weight:bold;display:block;margin-top:14px}
+input,select,button{width:100%;padding:10px;margin-top:6px;border-radius:8px;border:1px solid #ccc}
+button{background:#4a90e2;color:#fff;font-weight:bold;cursor:pointer}
+button:hover{background:#357ac8}
+#reset{background:#e74c3c}
+#result{white-space:pre-wrap;margin-top:20px;background:#fafafa;padding:14px;border-radius:10px}
+#msg{text-align:center;height:20px;color:#c0392b}
+</style>
+</head>
+<body>
+
+<div class="container">
+<div id="msg"></div>
+
+<label>上傳 CSV</label>
+<input type="file" id="csv">
+
+<label>日期</label>
+<input type="date" id="date">
+
+<label>獎項</label>
+<select id="award"></select>
+
+<label>人數</label>
+<input type="number" id="count" value="1" min="1">
+
+<button id="draw">抽獎</button>
+<button id="reset">重置</button>
+
+<div id="result"></div>
+<label style="margin-top:20px">查詢網站資料（winner-data.json）</label>
+<button id="downloadJson" type="button">下載 winner-data.json</button>
+<div id="jsonPreview" style="white-space:pre-wrap;margin-top:10px;background:#fafafa;padding:14px;border-radius:10px;max-height:220px;overflow:auto"></div>
+</div>
+
+<script>
+let participants=[], awards=[], filename=""
+let history={}, output={}
+let websiteData=[]
+
+const msg=t=>{document.getElementById("msg").textContent=t;setTimeout(()=>msg(""),2000)}
+
+document.getElementById("csv").onchange=e=>{
+  const f=e.target.files[0]; if(!f) return
+  const r=new FileReader()
+  r.onload=()=>{
+    const rows=r.result.trim().split(/\r?\n/).map(r=>r.split(","))
+    awards=rows[0].slice(2)
+    participants=rows.slice(1).map(r=>({
+      name:r[1], choices:r.slice(2)
+    }))
+    filename=f.name.replace(/（回覆）/,"").replace(/\..*/,"")
+    const sel=document.getElementById("award")
+    sel.innerHTML="<option value=''>選擇</option>"
+    awards.forEach(a=>sel.innerHTML+=`<option>${a}</option>`)
+    msg("CSV 載入完成")
+  }
+  r.readAsText(f,"utf-8")
+}
+
+document.getElementById("draw").onclick=()=>{
+  const date=document.getElementById("date").value
+  const award=document.getElementById("award").value
+  const num=+document.getElementById("count").value
+  if(!date||!award||!num) return msg("資料不完整")
+
+  const idx=awards.indexOf(award)
+  const eligible=participants.filter(p=>p.choices[idx]==="要").map(p=>p.name)
+  if(!eligible.length) return msg("沒有人填要")
+
+  const d=new Date(date)
+  const code=String(d.getMonth()+1).padStart(2,"0")+String(d.getDate()).padStart(2,"0")
+
+  history[award] ??= []
+  output[award] ??= []
+
+  const fresh=eligible.filter(p=>!history[award].includes(p))
+  const winners=[]
+
+  // 先抽沒中過的
+  while(winners.length<num && fresh.length){
+    winners.push(fresh.splice(Math.random()*fresh.length|0,1)[0])
+  }
+
+  // 不夠才補抽已中過的（但避免本次重複）
+  const fallback=eligible.filter(p=>!winners.includes(p))
+  while(winners.length<num && fallback.length){
+    winners.push(fallback.splice(Math.random()*fallback.length|0,1)[0])
+  }
+
+  history[award].push(...winners)
+  output[award].push({code,winners})
+  winners.forEach(winner=>websiteData.push({
+    award,
+    date:code,
+    winner
+  }))
+
+  let txt=filename+"\n"
+  for(const a in output){
+    txt+=a+"\n"
+    output[a].forEach(e=>txt+=e.code+e.winners.join(" / ")+"\n")
+    txt+="-\n"
+  }
+  document.getElementById("result").textContent=txt.trim()
+  document.getElementById("jsonPreview").textContent=JSON.stringify(websiteData,null,2)
+}
+
+document.getElementById("reset").onclick=()=>{
+  history={}; output={}; websiteData=[]
+  document.getElementById("result").textContent=""
+  document.getElementById("jsonPreview").textContent=""
+  msg("已重置")
+}
+
+document.getElementById("downloadJson").onclick=()=>{
+  if(!websiteData.length) return msg("目前沒有抽獎資料")
+  const blob=new Blob([JSON.stringify(websiteData,null,2)],{type:"application/json;charset=utf-8"})
+  const url=URL.createObjectURL(blob)
+  const a=document.createElement("a")
+  a.href=url
+  a.download="winner-data.json"
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  URL.revokeObjectURL(url)
+}
+
+</script>
+</body>
+</html>
