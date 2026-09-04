@@ -1,4 +1,4 @@
-# 遊戲中獎名單查詢｜GitHub Pages 0 元版
+# 遊戲中獎名單查詢
 
 第一次：建立 GitHub Public repository，上傳 index.html 與 winner-list.txt；Settings → Pages → Deploy from a branch → main / root。
 
